@@ -29,31 +29,32 @@ fs.mkdirSync(outFunctions, { recursive: true });
 copyDir(srcPublic, outStatic);
 console.log('vercel-build: copied public -> .vercel/output/static');
 
-// Copy api -> functions/api and generate .vc-config.json for each
+// Copy api -> functions/api as a single function (index.js wrapper + app copy)
 const funcApiDir = path.join(outFunctions, 'api');
 fs.mkdirSync(funcApiDir, { recursive: true });
 if(fs.existsSync(srcApi)){
-  const entries = fs.readdirSync(srcApi);
-  for(const entry of entries){
-    if(entry.endsWith('.js')){
-      const srcPath = path.join(srcApi, entry);
-      const destPath = path.join(funcApiDir, entry);
-      fs.copyFileSync(srcPath, destPath);
-      
-      // Create .vc-config.json for each function
-      const funcName = entry.replace('.js', '');
-      const configPath = path.join(funcApiDir, `${funcName}.vc-config.json`);
-      const config = {
-        "runtime": "nodejs18.x",
-        "handler": entry,
-        "launcherType": "Nodejs"
-      };
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-      console.log(`created ${funcName}.vc-config.json`);
-    }
+  // Copy the Express app entry as app.js
+  const srcIndex = path.join(srcApi, 'index.js');
+  const destApp = path.join(funcApiDir, 'app.js');
+  if(fs.existsSync(srcIndex)){
+    fs.copyFileSync(srcIndex, destApp);
+    console.log('copied api/index.js -> .vercel/output/functions/api/app.js');
   }
+
+  // Create wrapper index.js that uses serverless-http
+  const wrapper = `const serverless = require('serverless-http');\nconst app = require('./app');\nmodule.exports = serverless(app);\n`;
+  fs.writeFileSync(path.join(funcApiDir, 'index.js'), wrapper);
+
+  // Create function config
+  const funcConfig = {
+    "runtime": "nodejs18.x",
+    "handler": "index.js",
+    "launcherType": "Nodejs"
+  };
+  fs.writeFileSync(path.join(funcApiDir, '.vc-config.json'), JSON.stringify(funcConfig, null, 2));
+  console.log('created .vc-config.json for api function');
 }
-console.log('vercel-build: copied api -> .vercel/output/functions/api');
+console.log('vercel-build: prepared single api function at .vercel/output/functions/api');
 
 // Write build info
 fs.writeFileSync(path.join('.vercel','output','build-info.txt'), `built at ${new Date().toISOString()}`);
