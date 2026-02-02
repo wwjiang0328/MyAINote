@@ -1,0 +1,1 @@
+static copied into .vercel/output/static for guaranteed deployment
