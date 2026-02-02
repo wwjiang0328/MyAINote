@@ -62,15 +62,23 @@ export default {
         }
 
         dedup.sort((a,b)=> (b.time||0) - (a.time||0))
-        // Map to items with Chinese summary fallback being original title trimmed
-        items.value = dedup.map(it=>({
+        // Limit to top 10 and map to items with Chinese summary placeholder
+        items.value = dedup.slice(0,10).map(it=>({
           id: it.id || it.title,
           time: it.time || Date.now()/1000,
           summary: summarizeOneLine(it.summary || it.title),
           orig: it,
           zh: null
         }))
-        statusMessage.value = `更新：${new Date().toLocaleTimeString()}`
+
+        // Auto-translate each item to Chinese (falls back to original summary if no translation API configured)
+        try{
+          await Promise.all(items.value.map(i=> translateItem(i)))
+          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条，已尝试自动翻译）`
+        }catch(e){
+          // If translation fails, still show items
+          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条）`
+        }
       }catch(e){
         console.error(e)
         statusMessage.value = '加载失败：网络错误'

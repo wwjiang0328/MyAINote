@@ -8,7 +8,8 @@
       </div>
       <div class="sub">来源：{{ item.orig?.source || '未知' }}</div>
       <div class="actions">
-        <button class="small" @click="$emit('translate-item', item)" :disabled="translating[item.id]">翻译为中文</button>
+        <button v-if="!item.zh" class="small" @click="$emit('translate-item', item)" :disabled="translating[item.id]">翻译为中文</button>
+        <span v-else class="translated">已翻译</span>
         <span v-if="translating[item.id]">翻译中…</span>
       </div>
     </div>
@@ -41,4 +42,6 @@ export default {
 .sub{color:#9aa6b2;margin-top:8px}
 .actions{margin-top:8px}
 .small{background:transparent;border:1px solid rgba(255,255,255,0.06);color:#00f6ff;padding:6px 8px;border-radius:8px;cursor:pointer}
+
+.translated{color:#6ee7b7;margin-left:8px;font-size:13px}
 </style>
