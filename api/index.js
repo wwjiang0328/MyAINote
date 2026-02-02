@@ -68,6 +68,11 @@ async function fetchHackerNews(startTs, limit=30){
   }
 }
 
+app.use((req, res, next) => {
+  console.log('[api] incoming', req.method, req.originalUrl, 'path=', req.path);
+  next();
+});
+
 app.get('/api/ping', (req, res) => {
   res.setHeader('Content-Type','application/json');
   res.json({ok:true, time: new Date().toISOString()});
