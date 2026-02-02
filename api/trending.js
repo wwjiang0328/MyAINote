@@ -77,16 +77,29 @@ export default async function handler(req, res){
     console.log('[trending] Starting fetch at', new Date().toISOString());
     const startTs = START_OF_DAY();
     
-    const [r1,r2,r3, hn] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchReddit('MachineLearning', 10),
       fetchReddit('ArtificialIntelligence', 10),
       fetchReddit('MachineLearningProjects', 6),
       fetchHackerNews(startTs, 30)
     ]);
 
-    console.log(`[trending] Fetched: Reddit=${r1.length}+${r2.length}+${r3.length}, HN=${hn.length}`);
+    let items = [];
+    let fetchStatus = [];
 
-    let items = [...r1, ...r2, ...r3, ...hn];
+    results.forEach((result, index) => {
+      const sourceName = ['r/ML', 'r/AI', 'r/MLProjects', 'HN'][index];
+      if (result.status === 'fulfilled') {
+        items = items.concat(result.value);
+        fetchStatus.push(`${sourceName}: ${result.value.length}`);
+      } else {
+        console.warn(`[trending] Fetch failed for source ${sourceName}:`, result.reason?.message);
+        fetchStatus.push(`${sourceName}: failed`);
+      }
+    });
+
+    console.log(`[trending] Fetched: ${fetchStatus.join(', ')}`);
+
     items = items.filter(it => /(ai|artificial intelligence|machine learning|deep learning|llm)/i.test((it.title + ' ' + it.summary)));
 
     const seen = new Set();
