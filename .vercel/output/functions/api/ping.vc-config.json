@@ -1,0 +1,5 @@
+{
+  "runtime": "nodejs18.x",
+  "handler": "ping.js",
+  "launcherType": "Nodejs"
+}

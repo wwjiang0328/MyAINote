@@ -29,16 +29,27 @@ fs.mkdirSync(outFunctions, { recursive: true });
 copyDir(srcPublic, outStatic);
 console.log('vercel-build: copied public -> .vercel/output/static');
 
-// Copy api -> functions/api
+// Copy api -> functions/api and generate .vc-config.json for each
 const funcApiDir = path.join(outFunctions, 'api');
 fs.mkdirSync(funcApiDir, { recursive: true });
 if(fs.existsSync(srcApi)){
   const entries = fs.readdirSync(srcApi);
   for(const entry of entries){
-    const srcPath = path.join(srcApi, entry);
-    const destPath = path.join(funcApiDir, entry);
-    if(fs.statSync(srcPath).isFile()){
+    if(entry.endsWith('.js')){
+      const srcPath = path.join(srcApi, entry);
+      const destPath = path.join(funcApiDir, entry);
       fs.copyFileSync(srcPath, destPath);
+      
+      // Create .vc-config.json for each function
+      const funcName = entry.replace('.js', '');
+      const configPath = path.join(funcApiDir, `${funcName}.vc-config.json`);
+      const config = {
+        "runtime": "nodejs18.x",
+        "handler": entry,
+        "launcherType": "Nodejs"
+      };
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.log(`created ${funcName}.vc-config.json`);
     }
   }
 }
