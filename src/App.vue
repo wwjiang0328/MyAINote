@@ -5,182 +5,69 @@
         <h1>今日 AI 风向 🌐</h1>
         <div class="meta">
           <div class="date">{{ todayLabel }}</div>
-          <div class="controls">
-            <button @click="refresh" class="btn">刷新</button>
-            <label class="auto">自动刷新 <input type="checkbox" v-model="auto" /></label>
-          </div>
         </div>
       </div>
     </header>
 
     <main class="container">
       <div class="status">{{ statusMessage }}</div>
-      <TrendingList :items="items" :translating="translating" @translate-item="translateItem" />
+      <TimelineList :items="timeline" />
     </main>
 
-    <footer class="footer">数据源：Reddit / Hacker News • 仅显示中文摘要（若能自动翻译）</footer>
+    <footer class="footer">数据说明：静态整理，中文展示</footer>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import TrendingList from './components/TrendingList.vue'
+import { ref } from 'vue'
+import TimelineList from './components/TimelineList.vue'
 
 export default {
-  components: { TrendingList },
+  components: { TimelineList },
   setup(){
-    const items = ref([])
-    const statusMessage = ref('加载中…')
-    const auto = ref(true)
-    const timer = ref(null)
-    const translating = ref({})
+    // 静态中文时间线（按时间倒序）
+    const timeline = ref([
+      {
+        date: '2024',
+        title: '大规模多模态与高效推理',
+        desc: '多模态能力与推理效率成为主流，研究与产业双向推进，生成式应用日益丰富。',
+        models: ['GPT-4（系列）', 'Claude（系列）', 'PaLM 2', 'LLaMA 2']
+      },
+      {
+        date: '2022–2023',
+        title: '大语言模型（LLM）爆发',
+        desc: '以对话接口和生成能力为代表的 LLM 进入大众视野，推动了大量应用落地。',
+        models: ['ChatGPT（GPT-3.5 / GPT-4）', 'Bard', 'LLaMA']
+      },
+      {
+        date: '2018',
+        title: '预训练-微调范式普及',
+        desc: 'BERT 等预训练模型广泛用于下游任务，预训练成为 NLP 的标准流程。',
+        models: ['BERT', 'RoBERTa']
+      },
+      {
+        date: '2017',
+        title: 'Transformer 架构提出',
+        desc: '自注意力机制改变了序列建模方式，为后续大模型奠定基础。',
+        models: ['Transformer']
+      },
+      {
+        date: '2012',
+        title: '深度学习在图像识别上突破',
+        desc: 'AlexNet 在图像识别竞赛中取得决定性进展，深度学习研究和工程进入快速发展期。',
+        models: ['AlexNet']
+      }
+    ])
+
+    const statusMessage = ref('静态展示：AI 历史进展（按时间倒序，中文）')
+
 
     const prettyDate = (d)=> d.toLocaleString('zh-CN', { weekday: 'long', year:'numeric', month:'2-digit', day:'2-digit' })
     const todayLabel = prettyDate(new Date())
 
-    async function fetchData(){
-      statusMessage.value = '加载中…'
-      try{
-        const [rHn, rR1, rR2] = await Promise.all([
-          fetchHN(),
-          fetchReddit('MachineLearning'),
-          fetchReddit('ArtificialIntelligence')
-        ])
+    // 本页面为静态中文时间线，无网络抓取或翻译逻辑。时间线数据保存在 `timeline` 变量中。
 
-        let all = [...rHn, ...rR1, ...rR2]
-        // filter keywords related to AI
-        all = all.filter(it => /ai|artificial intelligence|machine learning|deep learning|llm|large language model|transformer/i.test((it.title + ' ' + (it.summary||''))))
-
-        // dedup by title+url
-        const seen = new Set()
-        const dedup = []
-        for(const it of all){
-          const k = (it.title + '|' + (it.url||'')).toLowerCase()
-          if(seen.has(k)) continue
-          seen.add(k)
-          dedup.push(it)
-        }
-
-        dedup.sort((a,b)=> (b.time||0) - (a.time||0))
-        // Limit to top 10 and map to items with Chinese summary placeholder
-        items.value = dedup.slice(0,10).map(it=>({
-          id: it.id || it.title,
-          time: it.time || Date.now()/1000,
-          summary: summarizeOneLine(it.summary || it.title),
-          orig: it,
-          zh: null
-        }))
-
-        // Auto-translate each item to Chinese (falls back to original summary if no translation API configured)
-        try{
-          // Auto-translate items. If no API is configured, we'll use the public LibreTranslate fallback.
-          const usedFallback = !import.meta.env.VITE_TRANSLATE_API
-          await Promise.all(items.value.map(i=> translateItem(i)))
-          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条${usedFallback? '，使用 LibreTranslate 公开接口自动翻译' : '，已尝试自动翻译'}）`
-        }catch(e){
-          // If translation fails, still show items
-          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条，自动翻译失败）`
-        }
-      }catch(e){
-        console.error(e)
-        statusMessage.value = '加载失败：网络错误'
-      }
-    }
-
-    function summarizeOneLine(s){
-      const t = s.replace(/\s+/g,' ').trim()
-      return t.length>200 ? t.slice(0,197) + '...' : t
-    }
-
-    async function fetchHN(){
-      try{
-        const url = `https://hn.algolia.com/api/v1/search?query=AI&tags=story&hitsPerPage=50`
-        const res = await fetch(url)
-        if(!res.ok) return []
-        const j = await res.json()
-        return (j.hits||[]).map(h=>({
-          id: `hn_${h.objectID}`,
-          title: h.title || '',
-          summary: h.title || '',
-          url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`,
-          source: 'HackerNews',
-          score: h.points || 0,
-          time: Math.floor(new Date(h.created_at).getTime()/1000)
-        }))
-      }catch(e){ console.warn(e); return [] }
-    }
-
-    async function fetchReddit(sub){
-      try{
-        const url = `https://www.reddit.com/r/${sub}/top/.json?t=day&limit=30`
-        const res = await fetch(url, { headers: { 'User-Agent': 'MyAINote/1.0' } })
-        if(!res.ok) return []
-        const j = await res.json()
-        return (j.data?.children||[]).map(c=>({
-          id: `reddit_${c.data.id}`,
-          title: c.data.title || '',
-          summary: (c.data.selftext && c.data.selftext.trim()) ? c.data.selftext.replace(/\n+/g,' ').slice(0,300) : c.data.title,
-          url: c.data.url,
-          source: `r/${sub}`,
-          score: c.data.score || 0,
-          time: Math.floor((c.data.created_utc||0))
-        }))
-      }catch(e){ console.warn(e); return [] }
-    }
-
-    async function translateItem(item){
-      // If already has zh, do nothing
-      if(item.zh) return
-      translating.value[item.id] = true
-      try{
-        // Use configured API if provided, otherwise fallback to public LibreTranslate
-        const configured = import.meta.env.VITE_TRANSLATE_API || ''
-        const api = configured || 'https://libretranslate.de/translate'
-
-        const body = { q: item.summary, source: 'auto', target: 'zh', format: 'text' }
-        const res = await fetch(api, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        })
-
-        if(res.ok){
-          const j = await res.json()
-          // LibreTranslate returns { translatedText }
-          item.zh = j.translatedText || j.result || j.translation || (j[0] && j[0].translatedText) || item.summary
-          if(!configured) console.info('Using public LibreTranslate fallback for translation')
-        } else {
-          console.warn('Translate API returned non-OK', res.status)
-          item.zh = item.summary
-        }
-      }catch(e){
-        console.warn('Translate request failed', e)
-        item.zh = item.summary
-      }
-      translating.value[item.id] = false
-    }
-
-    function startAuto(){
-      stopAuto()
-      timer.value = setInterval(()=> fetchData(), 1000*60*2)
-    }
-    function stopAuto(){ if(timer.value){ clearInterval(timer.value); timer.value=null } }
-
-    function refresh(){ fetchData() }
-
-    onMounted(()=>{
-      fetchData()
-      if(auto.value) startAuto()
-    })
-    onBeforeUnmount(()=> stopAuto())
-
-    // watch:auto
-    const stopWatchAuto = () => {
-      if(auto.value) startAuto()
-      else stopAuto()
-    }
-
-    return { items, statusMessage, auto, todayLabel, translateItem, refresh, translating }
+    return { timeline, statusMessage, todayLabel }
   }
 }
 </script>
