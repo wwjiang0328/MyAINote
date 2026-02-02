@@ -16,6 +16,11 @@
         <div class="timeline-year">{{ item.year }}</div>
         <h3 class="timeline-title">{{ item.title }}</h3>
         <p class="timeline-description">{{ item.description }}</p>
+        <div class="timeline-keywords">
+          <span v-for="keyword in item.keywords" :key="keyword" class="keyword-tag">
+            {{ keyword }}
+          </span>
+        </div>
       </div>
     </div>
   </div>
@@ -163,6 +168,28 @@ onUnmounted(() => {
   font-size: 0.9rem;
   line-height: 1.6;
   color: var(--text-secondary);
+  margin-bottom: 15px;
+}
+
+.timeline-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.timeline-item-left .timeline-keywords {
+  justify-content: flex-end;
+}
+
+.keyword-tag {
+  background-color: rgba(0, 178, 255, 0.1);
+  color: var(--secondary-glow);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 400;
+  border: 1px solid rgba(0, 178, 255, 0.2);
+  transition: all 0.3s ease;
 }
 
 /* Responsive adjustments */
@@ -188,7 +215,10 @@ onUnmounted(() => {
   }
   .timeline-item-left .timeline-dot,
   .timeline-item-right .timeline-dot {
-    left: 12.5px; /* JS style was -7.5px, now 12.5px for both */
+    left: 12.5px;
+  }
+  .timeline-item-left .timeline-keywords {
+    justify-content: flex-start;
   }
 }
 </style>
