@@ -1,7 +1,7 @@
 {
   "version": 3,
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/api/(.*)", "dest": "/functions/api/$1", "headers": { "cache-control": "public, max-age=300" } },
     { "handle": "filesystem" },
     { "src": "^(?:\/(.*))?$", "dest": "/static/index.html" }
   ]
