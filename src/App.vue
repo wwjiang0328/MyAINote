@@ -73,11 +73,13 @@ export default {
 
         // Auto-translate each item to Chinese (falls back to original summary if no translation API configured)
         try{
+          // Auto-translate items. If no API is configured, we'll use the public LibreTranslate fallback.
+          const usedFallback = !import.meta.env.VITE_TRANSLATE_API
           await Promise.all(items.value.map(i=> translateItem(i)))
-          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条，已尝试自动翻译）`
+          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条${usedFallback? '，使用 LibreTranslate 公开接口自动翻译' : '，已尝试自动翻译'}）`
         }catch(e){
           // If translation fails, still show items
-          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条）`
+          statusMessage.value = `更新：${new Date().toLocaleTimeString()}（显示前10条，自动翻译失败）`
         }
       }catch(e){
         console.error(e)
@@ -131,26 +133,28 @@ export default {
       if(item.zh) return
       translating.value[item.id] = true
       try{
-        const api = import.meta.env.VITE_TRANSLATE_API || ''
-        if(!api){
-          // No translation API; mark zh as summary placeholder
-          item.zh = item.summary
+        // Use configured API if provided, otherwise fallback to public LibreTranslate
+        const configured = import.meta.env.VITE_TRANSLATE_API || ''
+        const api = configured || 'https://libretranslate.de/translate'
+
+        const body = { q: item.summary, source: 'auto', target: 'zh', format: 'text' }
+        const res = await fetch(api, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+
+        if(res.ok){
+          const j = await res.json()
+          // LibreTranslate returns { translatedText }
+          item.zh = j.translatedText || j.result || j.translation || (j[0] && j[0].translatedText) || item.summary
+          if(!configured) console.info('Using public LibreTranslate fallback for translation')
         } else {
-          const res = await fetch(api, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ q: item.summary, source: 'auto', target: 'zh' })
-          })
-          if(res.ok){
-            const j = await res.json()
-            // Accept both {translatedText} or {result} style
-            item.zh = j.translatedText || j.result || j.translation || (j[0] && j[0].translatedText) || item.summary
-          } else {
-            item.zh = item.summary
-          }
+          console.warn('Translate API returned non-OK', res.status)
+          item.zh = item.summary
         }
       }catch(e){
-        console.warn(e)
+        console.warn('Translate request failed', e)
         item.zh = item.summary
       }
       translating.value[item.id] = false
